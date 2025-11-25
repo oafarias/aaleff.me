@@ -19,8 +19,10 @@ jobs:
           key: ${{ secrets.SSH_KEY }}
           source: "src/*"
           target: "/home/aaleff/apps/landing-page"
+          timeout: "120s"
+          command_timeout: "30m"
 
-      - name: 🔄 Reiniciar Nginx (Opcional, mas garante cache limpo)
+      - name: 🔄 Reiniciar Nginx
         uses: appleboy/ssh-action@master
         with:
           host: ${{ secrets.HOST }}
