@@ -1,0 +1,30 @@
+name: Deploy aaleff.me
+
+on:
+  push:
+    branches: [ "main" ]
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: 🚚 Pegar código do GitHub
+        uses: actions/checkout@v4
+
+      - name: 📂 Copiar arquivos para o servidor
+        uses: appleboy/scp-action@master
+        with:
+          host: ${{ secrets.HOST }}
+          username: ${{ secrets.USERNAME }}
+          key: ${{ secrets.SSH_KEY }}
+          source: "src/*"
+          target: "/home/aaleff/apps/landing-page"
+
+      - name: 🔄 Reiniciar Nginx (Opcional, mas garante cache limpo)
+        uses: appleboy/ssh-action@master
+        with:
+          host: ${{ secrets.HOST }}
+          username: ${{ secrets.USERNAME }}
+          key: ${{ secrets.SSH_KEY }}
+          script: |
+            docker restart landing_page
