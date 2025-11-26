@@ -3,9 +3,119 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>CI/CD</title>
+    <title>Lista de Compras Full Stack</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;700&display=swap" rel="stylesheet">
+    <style>
+        body { font-family: 'Inter', sans-serif; }
+        .bg-custom { background-color: #0f172a; }
+    </style>
 </head>
-<body>
-    CI/CD Funcionando!
+<body class="bg-custom text-white min-h-screen p-6 md:p-12">
+
+    <div class="max-w-3xl mx-auto">
+        <header class="text-center mb-10">
+            <h1 class="text-4xl font-bold text-indigo-400 mb-2">
+                🛒 Lista de Compras do Aaleff
+            </h1>
+            <p class="text-sm text-gray-500">
+                Dados vindos da API Node.js/PostgreSQL em tempo real.
+            </p>
+        </header>
+
+        <!-- Loading / Error Message -->
+        <div id="status-message" class="text-center p-4 text-sm bg-gray-700/50 rounded-lg mb-6">
+            Carregando itens...
+        </div>
+
+        <!-- Shopping List -->
+        <div id="item-list" class="space-y-3">
+            <!-- Items will be injected here -->
+        </div>
+
+        <div class="text-center mt-8">
+            <a href="https://api.aaleff.me/api/health" target="_blank" class="text-sm text-gray-400 hover:text-indigo-400 transition">
+                Status da API
+            </a> |
+            <a href="https://n8n.aaleff.me" target="_blank" class="text-sm text-gray-400 hover:text-indigo-400 transition">
+                Acessar n8n
+            </a>
+        </div>
+    </div>
+
+    <script>
+        const API_URL = "https://api.aaleff.me/api/items";
+        const itemList = document.getElementById('item-list');
+        const statusMessage = document.getElementById('status-message');
+
+        // Função para formatar preço (simples)
+        const formatPrice = (price) => {
+            return parseFloat(price).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+        };
+
+        // Função principal para buscar e renderizar
+        async function fetchItems() {
+            statusMessage.textContent = "Buscando dados no servidor...";
+            statusMessage.classList.remove('text-red-400', 'text-green-400');
+            statusMessage.classList.add('text-yellow-400');
+
+            try {
+                // Adicionamos { mode: 'cors' } para compatibilidade em alguns navegadores
+                const response = await fetch(API_URL, { mode: 'cors' });
+                const data = await response.json();
+
+                if (data.status === 'success' && data.data) {
+                    renderItems(data.data);
+                    statusMessage.textContent = `Sucesso! ${data.data.length} itens encontrados.`;
+                    statusMessage.classList.replace('text-yellow-400', 'text-green-400');
+                } else {
+                    throw new Error(data.message || "Erro ao formatar resposta da API.");
+                }
+
+            } catch (error) {
+                console.error("Erro ao carregar dados:", error);
+                statusMessage.textContent = `Erro Fatal: ${error.message}. Verifique o console.`;
+                statusMessage.classList.replace('text-yellow-400', 'text-red-400');
+                itemList.innerHTML = '';
+            }
+        }
+
+        // Função para desenhar a lista na tela
+        function renderItems(items) {
+            itemList.innerHTML = ''; // Limpa a lista antiga
+
+            if (items.length === 0) {
+                itemList.innerHTML = '<p class="text-center text-gray-400">A lista está vazia! Adicione algo via Postman.</p>';
+                return;
+            }
+
+            items.forEach(item => {
+                const isPurchased = item.is_purchased;
+                const statusClass = isPurchased ? 'bg-green-700/30' : 'bg-slate-800/70';
+                const textDecoration = isPurchased ? 'line-through text-gray-500' : 'text-white';
+                
+                const itemDiv = document.createElement('div');
+                itemDiv.className = `p-4 flex justify-between items-center rounded-lg shadow-md transition ${statusClass}`;
+                
+                itemDiv.innerHTML = `
+                    <div>
+                        <p class="text-lg font-semibold ${textDecoration}">${item.name}</p>
+                        <p class="text-sm text-gray-400">
+                            Qtd: ${item.quantity} | ${formatPrice(item.price)}
+                        </p>
+                    </div>
+                    <div class="text-sm font-mono p-1 rounded ${isPurchased ? 'bg-green-500' : 'bg-yellow-500 text-slate-900'}">
+                        ${isPurchased ? 'Comprado' : 'Faltando'}
+                    </div>
+                `;
+
+                itemList.appendChild(itemDiv);
+            });
+        }
+
+        // Inicia o carregamento ao carregar a página
+        fetchItems();
+    </script>
+
 </body>
 </html>
