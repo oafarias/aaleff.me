@@ -3,42 +3,45 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Lista de Compras Full Stack (Frontend Mock)</title>
-    <!-- O CDN é ótimo para desenvolvimento, mas o console te lembra de usar a instalação PostCSS para produção. -->
+    <title>Lista de Compras Full Stack com Firestore</title>
+    <!-- 1. Carrega o Tailwind CSS CDN -->
     <script src="https://cdn.tailwindcss.com"></script>
+    <!-- 2. Carrega a folha de estilos customizada -->
+    <link rel="stylesheet" href="./style.css">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;700&display=swap" rel="stylesheet">
-    <style>
-        body { font-family: 'Inter', sans-serif; }
-        .bg-custom { background-color: #0f172a; }
-        /* Animação simples para o carregamento/status */
-        @keyframes pulse-dot {
-            0%, 100% { opacity: 1; }
-            50% { opacity: 0.5; }
-        }
-        .pulse-dot::after {
-            content: '.';
-            animation: pulse-dot 1.5s infinite;
-        }
-    </style>
 </head>
 <body class="bg-custom text-white min-h-screen p-6 md:p-12">
+
+    <!-- Modal de Alerta Customizado -->
+    <div id="custom-modal" class="modal fixed inset-0 bg-black bg-opacity-70 flex items-center justify-center z-50 opacity-0 invisible" onclick="closeModal()">
+        <div class="bg-slate-800 p-6 rounded-xl shadow-2xl max-w-sm w-full border-t-4 border-indigo-500" onclick="event.stopPropagation()">
+            <h3 id="modal-title" class="text-xl font-bold mb-3 text-indigo-400">Título</h3>
+            <p id="modal-message" class="text-gray-300 mb-6">Mensagem</p>
+            <button onclick="closeModal()" class="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2 rounded-lg transition">Entendi</button>
+        </div>
+    </div>
 
     <div class="max-w-3xl mx-auto">
         <header class="text-center mb-10">
             <h1 class="text-4xl font-bold text-indigo-400 mb-2">
-                🛒 Lista de Compras do Aaleff
+                🛒 Lista de Compras Full Stack
             </h1>
             <p class="text-sm text-gray-400">
-                Usando Mock Data (dados simulados) para evitar erro CORS.
+                Dados persistentes e em tempo real com Firestore.
             </p>
         </header>
+        
+        <!-- ID do Usuário para Colaboração -->
+        <div id="user-id-display" class="text-center text-xs text-gray-500 mb-4 truncate" title="Seu ID de Usuário (Necessário para Regras de Segurança)">
+            Autenticando...
+        </div>
 
-        <!-- Formulário de Adição (Funcionalidade Criativa) -->
+        <!-- Formulário de Adição -->
         <div id="add-form" class="bg-slate-800/70 p-5 mb-6 rounded-xl shadow-lg border border-slate-700">
             <h2 class="text-xl font-semibold mb-3 text-indigo-300">Adicionar Item</h2>
             <div class="grid grid-cols-1 md:grid-cols-4 gap-3">
-                <input id="item-name" type="text" placeholder="Nome do Item" class="col-span-2 p-3 rounded-lg bg-slate-700 text-white placeholder-gray-400 focus:ring-indigo-500 focus:border-indigo-500 border-none">
-                <input id="item-quantity" type="number" placeholder="Qtd" value="1" min="1" class="p-3 rounded-lg bg-slate-700 text-white placeholder-gray-400 focus:ring-indigo-500 focus:border-indigo-500 border-none">
+                <input id="item-name" type="text" placeholder="Nome do Item" class="col-span-2 p-3 rounded-lg bg-slate-700 text-white placeholder-gray-400 focus:ring-indigo-500 focus:border-indigo-500 border-none" required>
+                <input id="item-quantity" type="number" placeholder="Qtd" value="1" min="1" class="p-3 rounded-lg bg-slate-700 text-white placeholder-gray-400 focus:ring-indigo-500 focus:border-indigo-500 border-none" required>
                 <button id="add-button" class="col-span-1 p-3 rounded-lg bg-indigo-600 hover:bg-indigo-700 transition duration-200 font-bold">
                     Adicionar
                 </button>
@@ -57,192 +60,13 @@
 
         <div class="text-center mt-8">
             <p class="text-sm text-gray-500">
-                **Backend em breve!** Atualmente usando dados locais.
+                Os dados são armazenados publicamente em: 
+                <span id="collection-path-display" class="font-mono text-gray-600 break-all"></span>
             </p>
         </div>
     </div>
 
-    <script>
-        const itemList = document.getElementById('item-list');
-        const statusMessage = document.getElementById('status-message');
-        const itemNameInput = document.getElementById('item-name');
-        const itemQuantityInput = document.getElementById('item-quantity');
-        const addButton = document.getElementById('add-button');
-
-        // Estrutura de Mock Data que a API Node.js/PostgreSQL irá retornar
-        let mockData = [
-            { id: 1, name: "Pão Integral", quantity: 1, price: 6.99, is_purchased: false, created_at: Date.now() - 3600000 },
-            { id: 2, name: "Leite Desnatado", quantity: 2, price: 4.50, is_purchased: true, created_at: Date.now() - 7200000 },
-            { id: 3, name: "Ovos (dúzia)", quantity: 1, price: 15.00, is_purchased: false, created_at: Date.now() - 1800000 },
-            { id: 4, name: "Café Especial (500g)", quantity: 1, price: 29.90, is_purchased: true, created_at: Date.now() - 18000000 },
-        ];
-        
-        // Simula o ID para novos itens
-        let nextId = mockData.length + 1;
-
-        // Função para formatar preço (simples)
-        const formatPrice = (price) => {
-            return parseFloat(price).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
-        };
-
-        // Função para alternar o status de compra
-        function togglePurchase(id) {
-            const itemIndex = mockData.findIndex(item => item.id === id);
-            if (itemIndex !== -1) {
-                mockData[itemIndex].is_purchased = !mockData[itemIndex].is_purchased;
-                // Re-renderiza a lista após a mudança
-                renderItems(mockData);
-                updateStatusMessage();
-            }
-        }
-
-        // Função para adicionar um novo item (simulando uma chamada POST)
-        function addItem() {
-            const name = itemNameInput.value.trim();
-            const quantity = parseInt(itemQuantityInput.value, 10);
-            
-            if (name === "" || isNaN(quantity) || quantity < 1) {
-                alertModal("Por favor, insira um nome válido e uma quantidade maior que 0.", "Alerta", "yellow");
-                return;
-            }
-
-            const newItem = {
-                id: nextId++,
-                name: name,
-                quantity: quantity,
-                // Preço e status fixos para simplificar a simulação
-                price: 0.00, 
-                is_purchased: false,
-                created_at: Date.now()
-            };
-
-            // Adiciona o novo item e re-renderiza
-            mockData.push(newItem);
-            renderItems(mockData);
-            updateStatusMessage(`Item '${name}' adicionado com sucesso!`);
-            
-            // Limpa os campos
-            itemNameInput.value = '';
-            itemQuantityInput.value = '1';
-        }
-
-        // Função para atualizar a mensagem de status
-        function updateStatusMessage(message = null) {
-            const totalItems = mockData.length;
-            const purchasedItems = mockData.filter(item => item.is_purchased).length;
-            
-            if (message) {
-                statusMessage.textContent = message;
-                statusMessage.classList.remove('text-red-400', 'text-yellow-400');
-                statusMessage.classList.add('text-green-400');
-            } else if (totalItems > 0) {
-                statusMessage.textContent = `Lista OK: ${purchasedItems} de ${totalItems} itens comprados.`;
-                statusMessage.classList.remove('text-red-400', 'text-yellow-400');
-                statusMessage.classList.add('text-green-400');
-            } else {
-                 statusMessage.textContent = 'A lista está vazia! Adicione um item acima.';
-                statusMessage.classList.remove('text-red-400', 'text-green-400');
-                statusMessage.classList.add('text-yellow-400');
-            }
-        }
-
-        // Função para desenhar a lista na tela
-        function renderItems(items) {
-            // Ordena os itens: não comprados primeiro, depois comprados, e por data de criação
-            const sortedItems = items.sort((a, b) => {
-                // Não comprados (false) vêm antes dos comprados (true)
-                if (a.is_purchased !== b.is_purchased) {
-                    return a.is_purchased ? 1 : -1;
-                }
-                // Se o status for o mesmo, ordena pelo mais novo primeiro
-                return b.created_at - a.created_at; 
-            });
-
-
-            itemList.innerHTML = ''; // Limpa a lista antiga
-
-            if (sortedItems.length === 0) {
-                itemList.innerHTML = '<p class="text-center text-gray-400 mt-8">A lista está vazia! Adicione o primeiro item.</p>';
-                return;
-            }
-
-            sortedItems.forEach(item => {
-                const isPurchased = item.is_purchased;
-                const statusClass = isPurchased 
-                    ? 'bg-green-800/30 hover:bg-green-700/50 border-green-700' 
-                    : 'bg-slate-800/70 hover:bg-slate-700/90 border-slate-700';
-                const textDecoration = isPurchased ? 'line-through text-gray-400' : 'text-white';
-                const buttonBg = isPurchased ? 'bg-yellow-500 hover:bg-yellow-600' : 'bg-green-500 hover:bg-green-600';
-                const buttonText = isPurchased ? 'Desmarcar' : 'Comprar';
-                const priceDisplay = item.price > 0 ? formatPrice(item.price) : 'Preço: N/A';
-                
-                const itemDiv = document.createElement('div');
-                itemDiv.className = `p-4 flex flex-col md:flex-row justify-between items-start md:items-center rounded-xl shadow-2xl transition duration-300 border-l-4 ${statusClass}`;
-                
-                itemDiv.innerHTML = `
-                    <div class="flex-grow mb-3 md:mb-0">
-                        <p class="text-xl font-semibold ${textDecoration}">${item.name}</p>
-                        <p class="text-sm text-gray-400">
-                            Qtd: ${item.quantity} | ${priceDisplay}
-                        </p>
-                    </div>
-                    <div class="flex items-center space-x-3">
-                        <div class="text-sm font-mono px-3 py-1 rounded-full ${isPurchased ? 'bg-green-600 text-white' : 'bg-yellow-500 text-slate-900'} shadow-inner">
-                            ${isPurchased ? 'Comprado' : 'Faltando'}
-                        </div>
-                        <button data-id="${item.id}" class="toggle-btn px-4 py-2 rounded-lg font-bold text-slate-900 transition ${buttonBg} shadow-md">
-                            ${buttonText}
-                        </button>
-                    </div>
-                `;
-
-                // Adiciona o listener de evento ao botão "Comprar/Desmarcar"
-                const toggleButton = itemDiv.querySelector('.toggle-btn');
-                toggleButton.addEventListener('click', () => togglePurchase(item.id));
-
-                itemList.appendChild(itemDiv);
-            });
-        }
-        
-        // Adiciona evento ao botão de adicionar
-        addButton.addEventListener('click', addItem);
-        // Permite adicionar pressionando Enter
-        itemNameInput.addEventListener('keypress', (e) => {
-            if (e.key === 'Enter') {
-                addItem();
-            }
-        });
-        itemQuantityInput.addEventListener('keypress', (e) => {
-            if (e.key === 'Enter') {
-                addItem();
-            }
-        });
-
-        // Simulação da busca de dados (para mostrar a mensagem de carregamento)
-        async function mockFetchItems() {
-            statusMessage.textContent = "Buscando dados no servidor (simulado)...";
-            statusMessage.classList.add('pulse-dot');
-            
-            // Simula um delay de rede de 1 segundo
-            await new Promise(resolve => setTimeout(resolve, 1000)); 
-
-            try {
-                // Simula o sucesso da API
-                renderItems(mockData);
-                updateStatusMessage();
-            } catch (error) {
-                // Em caso de erro, você veria isso aqui
-                console.error("Erro simulado: A API falhou miseravelmente.", error);
-                statusMessage.textContent = `Erro: Falha na simulação.`;
-                statusMessage.classList.replace('text-yellow-400', 'text-red-400');
-                itemList.innerHTML = '';
-            } finally {
-                 statusMessage.classList.remove('pulse-dot');
-            }
-        }
-        
-        // Inicia o carregamento ao carregar a página
-        mockFetchItems();
-    </script>
+    <!-- 3. Carrega o JavaScript como módulo -->
+    <script type="module" src="./script.js"></script>
 </body>
 </html>

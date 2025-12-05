@@ -1,0 +1,24 @@
+/* -----------------------------------
+   ESTILOS CUSTOMIZADOS (STYLE.CSS)
+   ----------------------------------- */
+
+/* Fonte aplicada ao corpo */
+body { font-family: 'Inter', sans-serif; }
+
+/* Cor de fundo customizada */
+.bg-custom { background-color: #0f172a; }
+
+/* Animação para o ponto de carregamento/status */
+@keyframes pulse-dot {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.5; }
+}
+.pulse-dot::after {
+    content: '.';
+    animation: pulse-dot 1.5s infinite;
+}
+
+/* Transição do Modal */
+.modal {
+    transition: opacity 0.3s ease-in-out, visibility 0.3s ease-in-out;
+}
