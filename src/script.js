@@ -10,9 +10,9 @@ import {
 } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
 // Variáveis de Configuração Global (Obrigatório)
-const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
-const firebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : null;
-const initialAuthToken = typeof __initial_auth_token !== 'undefined' ? __initial_auth_token : null;
+const appId = window.globalAppId || 'default-app-id';
+const firebaseConfig = window.globalFirebaseConfig;
+const initialAuthToken = window.globalInitialAuthToken;
 
 // Definição do caminho da coleção (Public Data)
 const COLLECTION_NAME = 'shopping_list';
@@ -29,12 +29,20 @@ const collectionPathDisplay = document.getElementById('collection-path-display')
 
 let db, auth, userId = null;
 let isAuthReady = false;
+let isLocalMode = false; // Novo flag para o modo Live Server
+
+// Variáveis para Persistência Local (Mock Data)
+let localItems = [
+    { id: 1, name: "Leite", quantity: 2, price: 4.50, is_purchased: true, created_at: Date.now() - 7200000 },
+    { id: 2, name: "Pão de Forma", quantity: 1, price: 6.99, is_purchased: false, created_at: Date.now() - 3600000 },
+];
+let localNextId = localItems.length + 1;
+
 
 // --- Funções de UI/UX ---
 
 // Função para formatar preço (simples, mantida como mock)
 const formatPrice = (price) => {
-    // Note: Mantivemos o `BRL` por contexto, mas os itens estão com preço 0.00
     return parseFloat(price).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
 };
 
@@ -47,13 +55,11 @@ function alertModal(message, title = "Atenção", type = "indigo") {
     modal.classList.remove('invisible', 'opacity-0');
     modal.classList.add('visible', 'opacity-100');
     
-    // Remove classes de cores antigas e adiciona a nova
     modal.querySelector('.border-t-4').className = `border-t-4 border-${type}-500`;
     modalTitle.textContent = title;
     modalMessage.textContent = message;
 }
 
-// Expõe a função globalmente para o HTML
 window.closeModal = function() {
     const modal = document.getElementById('custom-modal');
     modal.classList.remove('visible', 'opacity-100');
@@ -70,6 +76,9 @@ function updateStatusMessage(items, message = null) {
     if (message) {
         statusMessage.textContent = message;
         statusMessage.classList.add('text-green-400');
+    } else if (isLocalMode) {
+        statusMessage.textContent = `Modo Local: ${purchasedItems} de ${totalItems} itens (Não persistente).`;
+        statusMessage.classList.add('text-indigo-400');
     } else if (totalItems > 0) {
         statusMessage.textContent = `Lista OK: ${purchasedItems} de ${totalItems} itens comprados.`;
         statusMessage.classList.add('text-green-400');
@@ -79,97 +88,17 @@ function updateStatusMessage(items, message = null) {
     }
 }
 
-// --- Funções de CRUD (Firestore) ---
-
-// Função para adicionar um novo item
-async function addItem() {
-    const name = itemNameInput.value.trim();
-    const quantity = parseInt(itemQuantityInput.value, 10);
-    
-    if (!isAuthReady) {
-        alertModal("Aguarde a autenticação inicial.", "Erro de Auth", "red");
-        return;
-    }
-
-    if (name === "" || isNaN(quantity) || quantity < 1) {
-        alertModal("Por favor, insira um nome válido e uma quantidade maior que 0.", "Validação", "yellow");
-        return;
-    }
-
-    const newItem = {
-        name: name,
-        quantity: quantity,
-        // Mantemos o preço fixo por enquanto, focando na funcionalidade
-        price: 0.00, 
-        is_purchased: false,
-        created_at: Date.now(),
-        user_id: userId // Armazena quem criou, útil para segurança
-    };
-
-    statusMessage.textContent = "Adicionando item...";
-    statusMessage.classList.add('pulse-dot');
-
-    try {
-        await addDoc(collection(db, COLLECTION_PATH), newItem);
-        updateStatusMessage(null, `Item '${name}' adicionado com sucesso!`);
-    } catch (error) {
-        console.error("Erro ao adicionar documento:", error);
-        alertModal(`Falha ao adicionar: ${error.message}`, "Erro no Firestore", "red");
-    } finally {
-        statusMessage.classList.remove('pulse-dot');
-        itemNameInput.value = '';
-        itemQuantityInput.value = '1';
-    }
-}
-
-// Função para alternar o status de compra
-async function togglePurchase(itemId, isPurchased) {
-    if (!isAuthReady) return;
-    const itemRef = doc(db, COLLECTION_PATH, itemId);
-    try {
-        await updateDoc(itemRef, {
-            is_purchased: !isPurchased
-        });
-    } catch (error) {
-        console.error("Erro ao atualizar item:", error);
-        alertModal(`Falha ao atualizar o item. Tente novamente.`, "Erro no Firestore", "red");
-    }
-}
-
-// Função para deletar um item
-async function deleteItem(itemId, itemName) {
-    if (!isAuthReady) return;
-    
-    // Para um app real, aqui entraria um modal de confirmação antes de excluir.
-    
-    statusMessage.textContent = `Excluindo '${itemName}'...`;
-    statusMessage.classList.add('pulse-dot');
-
-    try {
-        const itemRef = doc(db, COLLECTION_PATH, itemId);
-        await deleteDoc(itemRef);
-        updateStatusMessage(null, `Item '${itemName}' excluído.`);
-    } catch (error) {
-        console.error("Erro ao excluir item:", error);
-        alertModal(`Falha ao excluir: ${error.message}`, "Erro no Firestore", "red");
-    } finally {
-        statusMessage.classList.remove('pulse-dot');
-    }
-}
-
-// Função para desenhar a lista na tela (chamada pelo onSnapshot)
+// Função para desenhar a lista na tela (chamada por onSnapshot ou renderLocalItems)
 function renderItems(items) {
-    // Ordena os itens: não comprados primeiro, depois comprados, e por data de criação
+    // ... Lógica de ordenação e renderização ...
     const sortedItems = items.sort((a, b) => {
-        // Não comprados (false) vêm antes dos comprados (true)
         if (a.is_purchased !== b.is_purchased) {
             return a.is_purchased ? 1 : -1;
         }
-        // Se o status for o mesmo, ordena pelo mais novo primeiro
         return b.created_at - a.created_at; 
     });
 
-    itemList.innerHTML = ''; // Limpa a lista antiga
+    itemList.innerHTML = ''; 
 
     if (sortedItems.length === 0) {
         itemList.innerHTML = '<p class="text-center text-gray-400 mt-8">A lista está vazia! Adicione o primeiro item.</p>';
@@ -210,34 +139,129 @@ function renderItems(items) {
             </div>
         `;
 
-        // Adiciona listeners para os novos botões
+        // Adiciona listeners para os botões (apontam para as funções genéricas)
         itemDiv.querySelector('.toggle-btn').addEventListener('click', () => togglePurchase(item.id, item.is_purchased));
         itemDiv.querySelector('.delete-btn').addEventListener('click', () => deleteItem(item.id, item.name));
 
         itemList.appendChild(itemDiv);
     });
 
-    // Atualiza o total de itens após a renderização
     updateStatusMessage(items);
+}
+
+
+// --- Lógica CRUD para Firestore e Local ---
+
+// Função principal de Adicionar
+async function addItem() {
+    const name = itemNameInput.value.trim();
+    const quantity = parseInt(itemQuantityInput.value, 10);
+    
+    if (!isAuthReady) {
+        alertModal("Aguarde a inicialização.", "Erro de Inicialização", "red");
+        return;
+    }
+
+    if (name === "" || isNaN(quantity) || quantity < 1) {
+        alertModal("Por favor, insira um nome válido e uma quantidade maior que 0.", "Validação", "yellow");
+        return;
+    }
+
+    statusMessage.textContent = "Adicionando item...";
+    statusMessage.classList.add('pulse-dot');
+
+    const newItem = {
+        name: name,
+        quantity: quantity,
+        price: 0.00, 
+        is_purchased: false,
+        created_at: Date.now(),
+        user_id: userId
+    };
+
+    try {
+        if (isLocalMode) {
+            // Modo Local: Adiciona ao array local
+            newItem.id = localNextId++;
+            localItems.push(newItem);
+            renderItems(localItems);
+            updateStatusMessage(null, `Item '${name}' adicionado (Local).`);
+        } else {
+            // Modo Firestore: Adiciona ao Firestore
+            await addDoc(collection(db, COLLECTION_PATH), newItem);
+            updateStatusMessage(null, `Item '${name}' adicionado com sucesso!`);
+        }
+    } catch (error) {
+        console.error("Erro ao adicionar documento:", error);
+        alertModal(`Falha ao adicionar: ${error.message}`, "Erro no Firestore/Local", "red");
+    } finally {
+        statusMessage.classList.remove('pulse-dot');
+        itemNameInput.value = '';
+        itemQuantityInput.value = '1';
+    }
+}
+
+// Função principal de Toggle Purchase (Comprar/Desmarcar)
+async function togglePurchase(itemId, isPurchased) {
+    if (!isAuthReady) return;
+
+    try {
+        if (isLocalMode) {
+            // Modo Local: Atualiza o item no array
+            const item = localItems.find(i => i.id === itemId);
+            if (item) {
+                item.is_purchased = !isPurchased;
+                renderItems(localItems);
+            }
+        } else {
+            // Modo Firestore: Atualiza no Firestore
+            const itemRef = doc(db, COLLECTION_PATH, itemId);
+            await updateDoc(itemRef, { is_purchased: !isPurchased });
+        }
+    } catch (error) {
+        console.error("Erro ao atualizar item:", error);
+        alertModal(`Falha ao atualizar o item. Tente novamente.`, "Erro de Persistência", "red");
+    }
+}
+
+// Função principal de Deletar
+async function deleteItem(itemId, itemName) {
+    if (!isAuthReady) return;
+    
+    statusMessage.textContent = `Excluindo '${itemName}'...`;
+    statusMessage.classList.add('pulse-dot');
+
+    try {
+        if (isLocalMode) {
+            // Modo Local: Filtra o item e re-renderiza
+            localItems = localItems.filter(i => i.id !== itemId);
+            renderItems(localItems);
+            updateStatusMessage(null, `Item '${itemName}' excluído (Local).`);
+        } else {
+            // Modo Firestore: Deleta do Firestore
+            const itemRef = doc(db, COLLECTION_PATH, itemId);
+            await deleteDoc(itemRef);
+            updateStatusMessage(null, `Item '${itemName}' excluído.`);
+        }
+    } catch (error) {
+        console.error("Erro ao excluir item:", error);
+        alertModal(`Falha ao excluir: ${error.message}`, "Erro de Persistência", "red");
+    } finally {
+        statusMessage.classList.remove('pulse-dot');
+    }
 }
 
 // --- Inicialização e Escuta de Dados ---
 
 function listenForItems() {
-    if (!isAuthReady) {
-        console.warn("Autenticação não concluída. Não iniciando listener do Firestore.");
-        return;
-    }
+    if (!isAuthReady || isLocalMode) return; // Não escuta se estiver no modo local
 
-    // Cria uma consulta à coleção
     const itemsCollection = collection(db, COLLECTION_PATH);
     const q = query(itemsCollection);
 
-    // Escuta em tempo real (onSnapshot)
     onSnapshot(q, (snapshot) => {
         const items = [];
         snapshot.forEach(doc => {
-            // Mapeia o documento, incluindo o ID do Firestore
             items.push({ id: doc.id, ...doc.data() });
         });
         renderItems(items);
@@ -249,13 +273,30 @@ function listenForItems() {
 }
 
 async function initApp() {
-    if (!firebaseConfig) {
-         statusMessage.textContent = "Erro: Configuração do Firebase não encontrada.";
-         statusMessage.classList.add('text-red-400');
-         return;
+    statusMessage.textContent = "Inicializando...";
+    statusMessage.classList.add('pulse-dot');
+
+    // 1. CHECAGEM DE MODO LOCAL
+    if (firebaseConfig.apiKey === "dummy-key") {
+        console.warn("Modo Local (Live Server) detectado. Inicializando Mock Data.");
+        isLocalMode = true;
+        userId = "LOCAL_MOCK_USER";
+        isAuthReady = true;
+
+        // Atualiza a UI para o modo local
+        userIdDisplay.textContent = `UID: ${userId} (MOCK)`;
+        userIdDisplay.classList.add('text-indigo-400');
+        collectionPathDisplay.textContent = 'local/memory/storage';
+        
+        // Renderiza itens locais
+        renderItems(localItems);
+        statusMessage.classList.remove('pulse-dot');
+        return; 
     }
     
-    setLogLevel('Debug'); // Para debug no console
+    // 2. MODO FIREBASE REAL
+    
+    setLogLevel('Debug');
 
     try {
         const app = initializeApp(firebaseConfig);
@@ -263,14 +304,12 @@ async function initApp() {
         auth = getAuth(app);
         collectionPathDisplay.textContent = COLLECTION_PATH;
 
-        // Autenticação
         if (initialAuthToken) {
             await signInWithCustomToken(auth, initialAuthToken);
         } else {
             await signInAnonymously(auth);
         }
 
-        // O listener de Auth garante que o Firestore só comece após o login
         onAuthStateChanged(auth, (user) => {
             if (user) {
                 userId = user.uid;
@@ -278,8 +317,6 @@ async function initApp() {
                 userIdDisplay.classList.remove('text-gray-500');
                 userIdDisplay.classList.add('text-indigo-400');
                 isAuthReady = true;
-                
-                // Começa a ouvir os dados em tempo real
                 listenForItems(); 
             } else {
                 userIdDisplay.textContent = "UID: Não autenticado";
@@ -300,10 +337,7 @@ async function initApp() {
 // LISTENERS DE EVENTOS
 // -----------------------------------------------------
 
-// Adiciona evento ao botão de adicionar
 addButton.addEventListener('click', addItem);
-
-// Permite adicionar pressionando Enter
 itemNameInput.addEventListener('keypress', (e) => {
     if (e.key === 'Enter') {
         addItem();
@@ -319,7 +353,4 @@ itemQuantityInput.addEventListener('keypress', (e) => {
 // INICIALIZAÇÃO
 // -----------------------------------------------------
 
-// Inicia o aplicativo ao carregar a página
-statusMessage.textContent = "Inicializando Firebase...";
-statusMessage.classList.add('pulse-dot');
 initApp();

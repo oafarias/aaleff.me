@@ -66,7 +66,32 @@
         </div>
     </div>
 
-    <!-- 3. Carrega o JavaScript como módulo -->
+    <!-- 3. Configuração de Escopo para o Módulo JS (CORREÇÃO DE ERRO) -->
+    <script>
+        // Variáveis injetadas pelo ambiente (Canvas)
+        const canvasAppId = typeof __app_id !== 'undefined' ? __app_id : null;
+        const canvasFirebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : null;
+        const canvasInitialAuthToken = typeof __initial_auth_token !== 'undefined' ? __initial_auth_token : null;
+
+        // --- CONFIGURAÇÃO DUMMY PARA RODAR LOCALMENTE (Live Server) ---
+        // Se a configuração real (do Canvas) não for encontrada, injetamos uma configuração fictícia 
+        // para evitar o erro de inicialização do Firebase no ambiente local.
+        const DUMMY_FIREBASE_CONFIG = {
+            apiKey: "dummy-key",
+            authDomain: "dummy.firebaseapp.com",
+            projectId: "dummy-project",
+            storageBucket: "dummy.appspot.com",
+            messagingSenderId: "1234567890",
+            appId: "1:1234567890:web:dummy"
+        };
+        
+        // Transfere as variáveis. Usa o valor real do Canvas ou o valor dummy para rodar localmente.
+        window.globalAppId = canvasAppId || 'default-app-id';
+        window.globalFirebaseConfig = canvasFirebaseConfig || DUMMY_FIREBASE_CONFIG;
+        window.globalInitialAuthToken = canvasInitialAuthToken;
+    </script>
+
+    <!-- 4. Carrega o JavaScript como módulo -->
     <script type="module" src="./script.js"></script>
 </body>
 </html>
